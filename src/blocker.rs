@@ -4,7 +4,7 @@ use core::task::RawWaker;
 use core::task::RawWakerVTable;
 use core::task::Waker;
 
-use crate::platform::*;
+use crate::platform::{AtomicU32, Ordering};
 
 // -----------------------------------------------------------------------------
 // States

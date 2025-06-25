@@ -10,6 +10,7 @@
 //! (a) The job does not outlive anything it closes over.
 //! (b) The job remains valid until it is executed for the last time.
 //! (c) Each job reference is executed exactly once.
+#![allow(clippy::inline_always)]
 
 use alloc::boxed::Box;
 use alloc::collections::VecDeque;
@@ -267,6 +268,7 @@ where
     F: FnOnce(&Worker) + Send,
 {
     /// Allocates a new `HeapJob` on the heap.
+    #[allow(clippy::unnecessary_box_returns)]
     pub fn new(f: F) -> Box<Self> {
         Box::new(HeapJob { f })
     }

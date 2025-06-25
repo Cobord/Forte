@@ -1,4 +1,5 @@
 //! This module contains the api and worker logic for the Forte thread pool.
+#![allow(clippy::inline_always)]
 
 use alloc::collections::BTreeMap;
 use alloc::collections::btree_map::Entry;
@@ -29,6 +30,7 @@ use crate::job::HeapJob;
 use crate::job::JobQueue;
 use crate::job::JobRef;
 use crate::job::StackJob;
+#[allow(clippy::wildcard_imports)]
 use crate::platform::*;
 use crate::scope::Scope;
 use crate::signal::Signal;
@@ -245,7 +247,7 @@ struct ThreadControl {
 // -----------------------------------------------------------------------------
 // Thread pool creation and maintenance
 
-#[allow(clippy::new_without_default)]
+#[allow(clippy::new_without_default, clippy::must_use_candidate)]
 impl ThreadPool {
     /// Creates a new thread pool.
     pub const fn new() -> ThreadPool {
@@ -264,6 +266,10 @@ impl ThreadPool {
 
     /// Claims a lease on the thread pool which can be occupied by a worker
     /// (using [`Worker::occupy`]), allowing a thread to participate in the pool.
+    ///
+    /// # Panics
+    ///
+    /// Could not get the [`ThreadPoolState`] out of the `Mutex`
     pub fn claim_lease(&'static self) -> Lease {
         let mut state = self.state.lock().unwrap();
         state.claim_lease(self)
@@ -330,6 +336,12 @@ impl ThreadPool {
     /// Resizes the pool, and returns the new size.
     ///
     /// Not that the new size may be different from the size requested.
+    ///
+    /// # Panics
+    ///
+    /// Either
+    /// - Could not get the [`ThreadPoolState`] out of the `Mutex`
+    /// - Failure to create thread at OS level
     #[cold]
     pub fn resize<F>(&'static self, get_size: F) -> usize
     where
@@ -527,6 +539,7 @@ impl ThreadPool {
 
             // Define a function to run the runnable that will be comparable with `JobRef`.
             #[inline]
+            #[allow(clippy::items_after_statements)]
             fn execute_runnable(this: NonNull<()>, _worker: &Worker) {
                 // SAFETY: This pointer was created by the call to `Runnable::into_raw` just above.
                 let runnable = unsafe { Runnable::<()>::from_raw(this) };
@@ -672,6 +685,7 @@ impl Worker {
         F: FnOnce(&Worker) -> R,
     {
         let worker_ptr = WORKER_PTR.with(Cell::get);
+        #[allow(clippy::if_not_else)]
         if !worker_ptr.is_null() {
             // SAFETY: The `WORKER` static is only set by `occupy`, and it's
             // always set to a stack-allocated `Worker` which is never moved and
@@ -699,6 +713,7 @@ impl Worker {
         F: FnOnce(Option<&Worker>) -> R,
     {
         let worker_ptr = WORKER_PTR.with(Cell::get);
+        #[allow(clippy::if_not_else)]
         if !worker_ptr.is_null() {
             // SAFETY: The `WORKER` static is only set by `occupy`, and it's
             // always set to a stack-allocated `Worker` which is never moved and
@@ -823,6 +838,10 @@ impl Worker {
     }
 
     /// Claims a shared job from the thread pool.
+    ///
+    /// # Panics
+    ///
+    /// Could not get the [`ThreadPoolState`] out of the `Mutex`
     #[cold]
     pub fn claim_shared_job(&self) -> Option<JobRef> {
         self.lease
@@ -1102,6 +1121,10 @@ impl Worker {
 /// If there is no current thread pool, this panics.
 ///
 /// See also: [`Worker::spawn`] and [`ThreadPool::spawn`].
+///
+/// # Panics
+///
+/// This should be called from within a current thread pool.
 pub fn spawn<F>(f: F)
 where
     F: FnOnce(&Worker) + Send + 'static,
@@ -1118,6 +1141,10 @@ where
 /// If there is no current thread pool, this panics.
 ///
 /// See also: [`Worker::spawn_future`] and [`ThreadPool::spawn_future`].
+///
+/// # Panics
+///
+/// This should be called from within a current thread pool.
 pub fn spawn_future<F, T>(future: F) -> Task<T>
 where
     F: Future<Output = T> + Send + 'static,
@@ -1135,6 +1162,10 @@ where
 /// If there is no current thread pool, this panics.
 ///
 /// See also: [`Worker::spawn_async`] and [`ThreadPool::spawn_async`].
+///
+/// # Panics
+///
+/// This should be called from within a current thread pool.
 pub fn spawn_async<Fn, Fut, T>(f: Fn) -> Task<T>
 where
     Fn: FnOnce() -> Fut + Send + 'static,
@@ -1153,6 +1184,10 @@ where
 /// If there is no current thread pool, this panics.
 ///
 /// See also: [`Worker::spawn_future`] and [`ThreadPool::spawn_future`].
+///
+/// # Panics
+///
+/// This should be called from within a current thread pool.
 pub fn block_on<F, T>(future: F) -> T
 where
     F: Future<Output = T> + Send,
@@ -1170,6 +1205,10 @@ where
 /// If there is no current thread pool, this panics.
 ///
 /// See also: [`Worker::join`] and [`ThreadPool::join`].
+///
+/// # Panics
+///
+/// This should be called from within a current thread pool.
 pub fn join<A, B, RA, RB>(a: A, b: B) -> (RA, RB)
 where
     A: FnOnce(&Worker) -> RA + Send,
@@ -1189,6 +1228,10 @@ where
 /// If there is no current thread pool, this panics.
 ///
 /// See also: [`Worker::scope`] and [`ThreadPool::scope`].
+///
+/// # Panics
+///
+/// This should be called from within a current thread pool.
 pub fn scope<'scope, F, T>(f: F) -> T
 where
     F: FnOnce(Pin<&Scope<'scope>>) -> T + Send,
@@ -1208,6 +1251,7 @@ where
 /// Operating on the principle that you should finish what you start before
 /// starting something new, workers will first execute their queue, then execute
 /// shared jobs, then pull new jobs from the injector.
+#[allow(clippy::needless_pass_by_value)]
 fn managed_worker(lease: Lease, halt: Arc<AtomicBool>, barrier: Arc<Barrier>) {
     trace!("starting managed worker");
 
@@ -1250,6 +1294,7 @@ fn managed_worker(lease: Lease, halt: Arc<AtomicBool>, barrier: Arc<Barrier>) {
 /// lock contention.
 ///
 /// This is never runs when testing in shuttle.
+#[allow(clippy::needless_pass_by_value)]
 #[cfg(not(feature = "shuttle"))]
 fn heartbeat_loop(thread_pool: &'static ThreadPool, halt: Arc<AtomicBool>) {
     use std::thread;
@@ -1262,6 +1307,7 @@ fn heartbeat_loop(thread_pool: &'static ThreadPool, halt: Arc<AtomicBool>) {
 
         let mut num_tenants = 0;
         let now = Instant::now();
+        #[allow(clippy::explicit_iter_loop)]
         for tenancy in state.tenants.iter_mut() {
             if let Some(tenant) = tenancy {
                 let Some(heartbeat) = tenant.heartbeat.upgrade() else {

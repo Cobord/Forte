@@ -4,10 +4,11 @@
 //!
 //! The implementation here is loosely adapted from chili and the oneshot crate,
 //! modified to use a futex instead of a CAS loop.
+#![allow(clippy::inline_always)]
 
 use core::cell::UnsafeCell;
 
-use crate::platform::*;
+use crate::platform::{AtomicU32, Ordering};
 
 // -----------------------------------------------------------------------------
 // States
@@ -146,6 +147,7 @@ impl<T: Send> Signal<T> {
         let state = unsafe { (*signal).state.load(Ordering::Relaxed) };
 
         // Panic if the signal has already been sent.
+        #[allow(clippy::manual_assert)]
         if state & SENT != 0 {
             panic!("attempted to send value over signal, but signal has already been sent");
         }

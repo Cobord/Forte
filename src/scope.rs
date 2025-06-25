@@ -13,7 +13,7 @@ use scope_ptr::ScopePtr;
 
 use crate::job::HeapJob;
 use crate::job::JobRef;
-use crate::platform::*;
+use crate::platform::{AtomicU32, Ordering};
 use crate::signal::Signal;
 use crate::thread_pool::Worker;
 
@@ -53,6 +53,7 @@ impl<'scope> Scope<'scope> {
     ///
     /// When a scope is dropped, it will block the thread until all work
     /// spawened on the scope is complete.
+    #[allow(clippy::must_use_candidate)]
     pub fn new() -> Scope<'scope> {
         Scope {
             count: AtomicU32::new(1),
