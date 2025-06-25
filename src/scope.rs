@@ -252,7 +252,7 @@ impl<'scope> Scope<'scope> {
     }
 }
 
-impl<'scope> Default for Scope<'scope> {
+impl Default for Scope<'_> {
     fn default() -> Self {
         Self::new()
     }
