@@ -176,7 +176,7 @@ impl<T: Send> Signal<T> {
         // thread to invalidate it.
         let state = unsafe { (*signal).state.fetch_or(SENT, Ordering::Release) };
         if state & WAIT != 0 {
-            // If the WAIT bit is set, then we receiving thread is asleep and we must wake it.
+            // If the WAIT bit is set, then the receiving thread is asleep and we must wake it.
             //
             // SAFETY: The caller ensures that this pointer is convertible to a
             // reference. It's not possible for it to have been invalidated
